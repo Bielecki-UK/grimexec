@@ -1,0 +1,35 @@
+#!/bin/bash
+set -euo pipefail
+
+# Configurable variables
+container_name="php"
+base_command="vendor/bin/pint"
+local_base_path="src/"
+container_base_path="/var/www/html/"
+
+# Pass all arguments to a variable
+additional_args="$*"
+
+# Get all staged and unstaged dirty PHP files, remove duplicates
+all_changed_files=$( \
+  { git diff --cached --name-only; git diff --name-only; } \
+  | grep -E '\.php$' \
+  | sort -u \
+  | grep .
+)
+
+if [ -n "$all_changed_files" ]; then
+    # Prepare file arguments for docker
+    file_args=$(echo "$all_changed_files" | sed "s|^${local_base_path}||" | sed "s|^|${container_base_path}|" | paste -sd ' ' -)
+
+    # Run the command and capture output
+    output=$(docker compose exec -T "$container_name" bash -c "$base_command $additional_args $file_args")
+    echo "$output"
+
+    # Check if any fixes were made
+    echo "$output" | grep -q 'fixed' && exit 1 || exit 0
+else
+    echo "No files to process."
+fi
+
+exit 0

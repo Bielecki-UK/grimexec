@@ -1,0 +1,38 @@
+#!/bin/bash
+set -euo pipefail
+
+container_name="php"
+local_base_path="src/"
+container_base_path="/var/www/html/"
+
+if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <command> [args...]"
+    exit 1
+fi
+
+user_command="$*"
+
+all_changed_files=$( \
+  { git diff --cached --name-only; git diff --name-only; } \
+  | grep -E '\.php$' \
+  | sort -u \
+  | grep .
+)
+
+if [ -n "$all_changed_files" ]; then
+    exit_code=0
+    for file in $all_changed_files; do
+        container_path="${container_base_path}${file#"$local_base_path"}"
+        full_command="$user_command $container_path"
+
+        if ! docker compose exec -T "$container_name" bash -c "$full_command"; then
+            exit_code=1
+        fi
+    done
+
+    exit "$exit_code"
+else
+    echo "No files to process."
+fi
+
+exit 0
